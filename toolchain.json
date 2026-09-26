@@ -1,0 +1,18 @@
+{
+  "status": "enforced-by-native-ci",
+  "xcode_version": "26.0.1",
+  "xcode_build": "17A400",
+  "iphoneos_sdk": "26.0",
+  "minimum_sdk_major": 26,
+  "deployment_target": "26.0",
+  "swift_language_mode": "6",
+  "bundle_identifier": "com.infinityball.shotdeck",
+  "targeted_device_family": "1",
+  "native_ipad_support": false,
+  "network_allowlist": [],
+  "implementation": "native-swift",
+  "schema": "tool-lab/toolchain/v1",
+  "platform": "ios",
+  "device_family": "iphone-only",
+  "notes": "Native iPhone-only app. CI asserts TARGETED_DEVICE_FAMILY=1 in every app-target configuration and measures the exact Xcode version/build/SDK. Missing exact tooling is an environment acceptance blocker, never permission to substitute a different toolchain."
+}

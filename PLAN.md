@@ -78,10 +78,12 @@ A single `ShootWorkspaceLayout` abstraction owns pane arrangement and fold-state
 ## Milestones and dependency order
 
 ### M1 — Scaffold + CI contract
+*(Delivered in issue #1)*
 
-- Create Xcode project and packages.
-- Add `toolchain.json` and CI checks for exact Xcode build/SDK and iPhone-only bundle metadata.
-- Add zero-network baseline checks for domain/store tests.
+- Created `ShotDeck.xcodeproj` with app target bundle identifier `com.infinityball.shotdeck` and `TARGETED_DEVICE_FAMILY = 1` across all configurations.
+- Added `Packages/ShotDeckKit` with pure Swift 6 domain skeleton, compiling placeholder target, and green swift-testing suite.
+- Wired `.github/workflows/ci.yml` running Linux package tests (`swift:6.2-noble`), zero-network gate, native-only framework guard, signing-material exclusion, and macOS exact-toolchain pin assertion (`Xcode 26.0.1 (17A400)`, iOS SDK 26.0) with built `UIDeviceFamily == [1]` verification.
+- Run commands documented in README.md quickstart.
 
 ### M2 — Domain + persistence core
 

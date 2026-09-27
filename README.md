@@ -6,7 +6,7 @@ Local-first iPhone shot-list and continuity workspace for solo creators: plan fr
 
 ShotDeck helps solo filmmakers, photographers, and small volunteer crews move from a planned shot list to an honest record of what was captured. A project contains ordered scenes and shots; each shot can carry framing notes, a reference image, continuity checks, and append-only take records. The app derives coverage from that ledger instead of asking users to remember which angles still need work.
 
-This repository is currently a documentation and backlog scaffold. No Xcode project, application build, archive, device result, or TestFlight build exists yet.
+This repository now includes a native Swift iPhone-only skeleton (`ShotDeck.xcodeproj`, `Packages/ShotDeckKit`) plus CI gates for exact toolchain pinning, zero-network enforcement, native-only framework policy, and iPhone-only bundle metadata. App features, persistence, and release automation beyond the scaffold are tracked as follow-up issues.
 
 ## Motivation
 
@@ -78,7 +78,7 @@ The current build shape is a standard native iPhone app. Native iPad support is 
 
 ## Status and milestones
 
-1. Native iPhone skeleton, exact-toolchain CI, and iPhone-only enforcement.
+1. Native iPhone skeleton, exact-toolchain CI, and iPhone-only enforcement. *(Landed: `ShotDeck.xcodeproj`, `Packages/ShotDeckKit`, `.github/workflows/ci.yml`.)*
 2. Pure Swift domain and coverage engine.
 3. Local database and app-private media store.
 4. Shot-list planning and accessible take workflow.
@@ -89,16 +89,18 @@ See [PLAN.md](PLAN.md) and the GitHub issue backlog for dependency order.
 
 ## Development quickstart
 
-The app workspace has not been created yet. After the skeleton issue lands, development will require the exact toolchain in `toolchain.json`:
+The workspace exists with the exact toolchain pin in `toolchain.json` (Xcode 26.0.1 / 17A400 / iOS SDK 26.0):
 
 ```bash
 xcodebuild -version
 xcodebuild -showsdks
 swift test --package-path Packages/ShotDeckKit
-xcodebuild -project ShotDeck.xcodeproj -scheme ShotDeck -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build test
+xcodebuild -project ShotDeck.xcodeproj -scheme ShotDeck -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+bash scripts/check_zero_network.sh
+bash scripts/check_native_only.sh
 ```
 
-On Linux, future pure-Swift packages and repository contract checks may run, but Linux cannot verify an iOS app build, archive, signing, `UIDeviceFamily`, simulator behavior, accessibility, or TestFlight processing.
+CI runs the same commands: `linux-package` exercises `swift test` plus the zero-network, native-only, and signing-material gitignore gates in a `swift:6.2-noble` container; `ios-build` asserts the exact Xcode pin, builds for `iphonesimulator`, and verifies built `UIDeviceFamily == [1]`, `com.infinityball.shotdeck`, and the embedded privacy manifest.
 
 ## Distribution
 

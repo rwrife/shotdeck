@@ -94,6 +94,9 @@ jobs:
       - name: Native-only framework guard
         run: bash scripts/check_native_only.sh
 
+      - name: Run package tests on Apple toolchain
+        run: swift test --package-path Packages/ShotDeckKit
+
       - name: iPhone-only pre-build assertion
         run: |
           set -euo pipefail

@@ -40,7 +40,13 @@ jobs:
 
   ios-build:
     name: iOS build + iPhone-only + toolchain pin
-    runs-on: macos-26
+    # Image selection, NOT a toolchain substitution: the exact Xcode 26.0.1
+    # (17A400) pin assertion below remains enforced. macos-26 hosted images
+    # intermittently lack the iOS 26 simulator platform runtime (fails at
+    # destination resolution pre-compile: "iOS 26.0 is not installed"),
+    # while macos-15 hosts the identical pin WITH the runtime — fleet proof:
+    # rwrife/split-slip run 36477468742 green on macos-15, same pin.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -93,6 +99,9 @@ jobs:
 
       - name: Native-only framework guard
         run: bash scripts/check_native_only.sh
+
+      - name: Run package tests on Apple toolchain
+        run: swift test --package-path Packages/ShotDeckKit
 
       - name: iPhone-only pre-build assertion
         run: |

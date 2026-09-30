@@ -1,11 +1,11 @@
 /// ShotDeckKit — pure-domain namespace.
 ///
-/// Issue #1 intentionally ships only bootstrap constants. Later slices add
-/// entities, coverage semantics, and persistence bridges.
+/// Public package metadata. Domain entities and coverage semantics live in
+/// `Domain.swift`; persistence bridges remain a later slice.
 public enum ShotDeckKit {
     /// Namespace marker for domain tests.
     public static let domain = "ShotDeckKit"
 
     /// Tracks the milestone delivered by this package revision.
-    public static let milestone = "M1-native-bootstrap"
+    public static let milestone = "M2-domain-coverage"
 }

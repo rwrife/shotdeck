@@ -9,7 +9,7 @@ import ShotDeckKit
 /// package sources — CI enforces an empty-allowlist scan.
 @main
 struct ShotDeckApp: App {
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView()
         }

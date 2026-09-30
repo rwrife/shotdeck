@@ -86,6 +86,7 @@ A single `ShootWorkspaceLayout` abstraction owns pane arrangement and fold-state
 - Run commands documented in README.md quickstart.
 
 ### M2 — Domain + persistence core
+*(Domain slice delivered in issue #2: `Packages/ShotDeckKit` entities, append-only take ledger, and unknown-safe coverage engine with table-driven tests.)*
 
 - Implement entities, coverage engine, and unknown-safe semantics.
 - Implement migrations and fixtures.

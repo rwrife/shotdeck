@@ -24,22 +24,22 @@ jobs:
       - name: Install SQLite dev headers (GRDB systemLibrary on Linux)
         run: |
           apt-get update -qq
-          apt-get install -y -qq libsqlite3-dev
+          apt-get install -y -qq libsqlite3-dev sqlite3
       - name: Run package tests
         run: swift test --package-path Packages/ShotDeckKit
       - name: Run store package tests
         run: swift test --package-path Packages/ShotDeckStore
       - name: Fixture migration verification (v1 -> current, committed artifact)
         run: |
+          set -euo pipefail
           swift run --package-path Packages/ShotDeckStore ShotDeckFixtureTool verify Fixtures/shotdeck-fixture-v1.sqlite
           # The committed fixture must remain a v1 artifact after verification.
-          python3 - <<'PY'
-          import sqlite3, sys
-          rows = [r[0] for r in sqlite3.connect("Fixtures/shotdeck-fixture-v1.sqlite").execute("SELECT identifier FROM grdb_migrations")]
-          if rows != ["v1-initial"]:
-              sys.exit(f"FAIL: committed fixture schema advanced unexpectedly: {rows}")
-          print("Committed fixture still at v1 schema: PASS")
-          PY
+          rows=$(sqlite3 Fixtures/shotdeck-fixture-v1.sqlite 'SELECT identifier FROM grdb_migrations;' | paste -sd, -)
+          if [ "$rows" != "v1-initial" ]; then
+            echo "::error::committed fixture schema advanced unexpectedly: $rows"
+            exit 1
+          fi
+          echo "Committed fixture still at v1 schema: PASS"
       - name: Zero-network gate
         run: bash scripts/check_zero_network.sh
       - name: Native-only framework guard

@@ -95,12 +95,14 @@ The workspace exists with the exact toolchain pin in `toolchain.json` (Xcode 26.
 xcodebuild -version
 xcodebuild -showsdks
 swift test --package-path Packages/ShotDeckKit
+swift test --package-path Packages/ShotDeckStore   # Linux needs libsqlite3-dev
+swift run --package-path Packages/ShotDeckStore ShotDeckFixtureTool verify Fixtures/shotdeck-fixture-v1.sqlite
 xcodebuild -project ShotDeck.xcodeproj -scheme ShotDeck -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 bash scripts/check_zero_network.sh
 bash scripts/check_native_only.sh
 ```
 
-CI runs the same commands: `linux-package` exercises `swift test` plus the zero-network, native-only, and signing-material gitignore gates in a `swift:6.2-noble` container; `ios-build` asserts the exact Xcode pin, builds for `iphonesimulator`, and verifies built `UIDeviceFamily == [1]`, `com.infinityball.shotdeck`, and the embedded privacy manifest.
+CI runs the same commands: `linux-package` exercises both package test suites (installing `libsqlite3-dev` for GRDB's systemLibrary Linux path) plus the fixture migration verification and the zero-network, native-only, and signing-material gitignore gates in a `swift:6.2-noble` container; `ios-build` asserts the exact Xcode pin, runs both package suites on the Apple toolchain, builds for `iphonesimulator`, and verifies built `UIDeviceFamily == [1]`, `com.infinityball.shotdeck`, and the embedded privacy manifest.
 
 ## Distribution
 

@@ -86,7 +86,7 @@ A single `ShootWorkspaceLayout` abstraction owns pane arrangement and fold-state
 - Run commands documented in README.md quickstart.
 
 ### M2 — Domain + persistence core
-*(Domain slice delivered in issue #2: `Packages/ShotDeckKit` entities, append-only take ledger, and unknown-safe coverage engine with table-driven tests.)*
+*(Domain slice delivered in issue #2: `Packages/ShotDeckKit` entities, append-only take ledger, and unknown-safe coverage engine with table-driven tests. Persistence slice delivered in issue #3: `Packages/ShotDeckStore` GRDB/SQLite store with named v1/v2 migrations, explicit ordered retrieval repositories, transactional take-ledger appends, explicit nullable candidate selection, a committed v1 fixture (`Fixtures/shotdeck-fixture-v1.sqlite`), and the `ShotDeckFixtureTool` generate/verify CLI.)*
 
 - Implement entities, coverage engine, and unknown-safe semantics.
 - Implement migrations and fixtures.

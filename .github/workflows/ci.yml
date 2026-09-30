@@ -21,8 +21,25 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Swift version
         run: swift --version
+      - name: Install SQLite dev headers (GRDB systemLibrary on Linux)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq libsqlite3-dev
       - name: Run package tests
         run: swift test --package-path Packages/ShotDeckKit
+      - name: Run store package tests
+        run: swift test --package-path Packages/ShotDeckStore
+      - name: Fixture migration verification (v1 -> current, committed artifact)
+        run: |
+          swift run --package-path Packages/ShotDeckStore ShotDeckFixtureTool verify Fixtures/shotdeck-fixture-v1.sqlite
+          # The committed fixture must remain a v1 artifact after verification.
+          python3 - <<'PY'
+          import sqlite3, sys
+          rows = [r[0] for r in sqlite3.connect("Fixtures/shotdeck-fixture-v1.sqlite").execute("SELECT identifier FROM grdb_migrations")]
+          if rows != ["v1-initial"]:
+              sys.exit(f"FAIL: committed fixture schema advanced unexpectedly: {rows}")
+          print("Committed fixture still at v1 schema: PASS")
+          PY
       - name: Zero-network gate
         run: bash scripts/check_zero_network.sh
       - name: Native-only framework guard
@@ -102,6 +119,9 @@ jobs:
 
       - name: Run package tests on Apple toolchain
         run: swift test --package-path Packages/ShotDeckKit
+
+      - name: Run store package tests on Apple toolchain
+        run: swift test --package-path Packages/ShotDeckStore
 
       - name: iPhone-only pre-build assertion
         run: |

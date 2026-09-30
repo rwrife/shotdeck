@@ -30,6 +30,7 @@ jobs:
       - name: Run store package tests
         run: swift test --package-path Packages/ShotDeckStore
       - name: Fixture migration verification (v1 -> current, committed artifact)
+        shell: bash
         run: |
           set -euo pipefail
           swift run --package-path Packages/ShotDeckStore ShotDeckFixtureTool verify Fixtures/shotdeck-fixture-v1.sqlite

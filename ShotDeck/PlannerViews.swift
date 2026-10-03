@@ -1,10 +1,9 @@
 import SwiftUI
 import ShotDeckKit
-
-// SwiftUI also ships a `Scene` type (window group abstraction). Planner
-// views always mean the domain scene, so pin the name at file scope —
-// qualification, not a domain rename.
-private typealias Scene = ShotDeckKit.Scene
+// SwiftUI also ships a `Scene` type (window group abstraction) that makes a
+// bare `Scene` ambiguous here. A selective import pins the name to the
+// domain type so every planner view means the ShotDeckKit scene.
+import struct ShotDeckKit.Scene
 
 /// Project list root (issue #4): create / rename / archive / delete.
 struct ProjectListView: View {

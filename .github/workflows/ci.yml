@@ -177,3 +177,41 @@ jobs:
           [ -f "$APP/PrivacyInfo.xcprivacy" ] \
             || { echo "::error::PrivacyInfo.xcprivacy not embedded in app bundle"; exit 1; }
           echo "Privacy manifest embedded: PASS"
+
+      - name: UI test journey (planner)
+        # Bounded below the job timeout so the xcresult upload below can run
+        # via if: always() even on simulator flake.
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          # Deployment target is iOS 26.0: the journey needs an iPhone on an
+          # iOS 26.x runtime. Pick one from that runtime's device section;
+          # older-runtime devices cannot install the app.
+          DEVICE=$(xcrun simctl list devices available | awk '
+            /^-- iOS/ { runtime = $0 }
+            /iPhone/ {
+              if (runtime ~ /iOS 26/) { gsub(/ *\(.*/, ""); gsub(/^ +/, ""); print; exit }
+            }')
+          if [ -z "$DEVICE" ]; then
+            echo "::error::ACCEPTANCE BLOCKER: no available iPhone on an iOS 26.x simulator runtime"
+            xcrun simctl list runtimes
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Testing on simulator: $DEVICE"
+          xcodebuild test \
+            -project ShotDeck.xcodeproj \
+            -scheme ShotDeck \
+            -only-testing:ShotDeckUITests \
+            -destination "platform=iOS Simulator,name=$DEVICE" \
+            CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath DerivedData \
+            -resultBundlePath UITests.xcresult
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: UITests.xcresult
+          if-no-files-found: warn

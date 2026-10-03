@@ -8,8 +8,8 @@ struct BootstrapContractTests {
         #expect(ShotDeckKit.domain == "ShotDeckKit")
     }
 
-    @Test("milestone identifies the domain and coverage slice")
+    @Test("milestone identifies the planner slice")
     func milestoneMarker() {
-        #expect(ShotDeckKit.milestone == "M2-domain-coverage")
+        #expect(ShotDeckKit.milestone == "M3-planner")
     }
 }

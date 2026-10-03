@@ -45,12 +45,67 @@ public final class ShotDeckStore: Sendable {
                 sql: "SELECT identifier FROM grdb_migrations"
             )
         }
-        let known: Set<String> = [Schema.migrationV1, Schema.migrationV2]
+        let known: Set<String> = [Schema.migrationV1, Schema.migrationV2, Schema.migrationV3]
         if applied.contains(where: { !known.contains($0) }) {
             throw StoreError.schemaTooNew(applied: applied, known: Array(known).sorted())
         }
         try Schema.fullMigrator().migrate(writer)
         self.writer = writer
+    }
+
+    // MARK: - Planner document persistence (issue #4)
+
+    /// Loose scene rows (position order across all projects) — used to
+    /// rehydrate a `PlannerModel` alongside `allProjects()` / `allShots()`.
+    public func allScenes() throws -> [Scene] {
+        try writer.read { db in
+            try SceneRecord.order(Column("position")).fetchAll(db).map { try $0.toDomain() }
+        }
+    }
+
+    /// Loose shot rows (position order across all scenes).
+    public func allShots() throws -> [Shot] {
+        try writer.read { db in
+            try ShotRecord.order(Column("position")).fetchAll(db).map { try $0.toDomain() }
+        }
+    }
+
+    /// Upsert the whole planner document in one transaction: projects,
+    /// scenes, and shots are written with the explicit positions the model
+    /// currently holds. This is UPSERT-only — rows removed from the model
+    /// are NOT deleted here; callers must apply the dedicated delete methods
+    /// (deleteProject/deleteScene/deleteShot) so cascade intent stays
+    /// explicit and take ledgers are never implicitly destroyed. Rewriting
+    /// the dataset transactionally after each edit keeps the store and an
+    /// observable app model from disagreeing while a persistence slice owns
+    /// app-side loading (issue #5 wires crash-safe restore).
+    public func savePlannerDocument(projects: [Project], scenes: [Scene], shots: [Shot]) throws {
+        try writer.write { db in
+            for (offset, project) in projects.enumerated() {
+                var record = try ProjectRecord.from(domain: project, position: Int64(offset))
+                try record.save(db)
+            }
+            for scene in scenes {
+                let position = try Self.scenePosition(scene, projects: projects)
+                var record = try SceneRecord.from(domain: scene, position: position)
+                try record.save(db)
+            }
+            for shot in shots {
+                let position = try Self.shotPosition(shot, scenes: scenes)
+                var record = try ShotRecord.from(domain: shot, position: position)
+                try record.save(db)
+            }
+        }
+    }
+
+    private static func scenePosition(_ scene: Scene, projects: [Project]) throws -> Int64 {
+        guard let project = projects.first(where: { $0.id == scene.projectID }) else { return 0 }
+        return Int64(project.sceneIDs.firstIndex(of: scene.id) ?? 0)
+    }
+
+    private static func shotPosition(_ shot: Shot, scenes: [Scene]) throws -> Int64 {
+        guard let scene = scenes.first(where: { $0.id == shot.sceneID }) else { return 0 }
+        return Int64(scene.shotIDs.firstIndex(of: shot.id) ?? 0)
     }
 
     // MARK: - Schema introspection
@@ -94,13 +149,6 @@ public final class ShotDeckStore: Sendable {
 
     // MARK: - Projects
 
-    public func saveProject(_ project: Project) throws {
-        try writer.write { db in
-            var record = try ProjectRecord.from(domain: project)
-            try record.save(db)
-        }
-    }
-
     public func project(_ id: ProjectID) throws -> Project {
         try writer.read { db in
             guard let record: ProjectRecord = try ProjectRecord
@@ -111,21 +159,97 @@ public final class ShotDeckStore: Sendable {
         }
     }
 
-    /// Projects ordered by their explicit sort key (insertion-stable).
+    /// Projects ordered by explicit position, tie-broken by the stable
+    /// sort key (insertion-stable, pre-v3 compatible).
     public func allProjects() throws -> [Project] {
         try writer.read { db in
             try ProjectRecord
-                .order(Column("sort_key"))
+                .order(Column("position"), Column("sort_key"))
                 .fetchAll(db)
                 .map { try $0.toDomain() }
         }
     }
 
+    public func saveProject(_ project: Project) throws {
+        try saveProject(project, position: 0)
+    }
+
+    public func saveProject(_ project: Project, position: Int64) throws {
+        try writer.write { db in
+            let existingPosition: Int64? = try Int64.fetchOne(
+                db,
+                sql: "SELECT position FROM project WHERE id = ?",
+                arguments: [uuidText(project.id.rawValue)]
+            )
+            var record = try ProjectRecord.from(domain: project, position: existingPosition ?? position)
+            try record.save(db)
+        }
+    }
+
+    /// Atomically rewrite project list positions to the given order.
+    public func setProjectOrder(_ projectIDs: [ProjectID]) throws {
+        try writer.write { db in
+            for (offset, projectID) in projectIDs.enumerated() {
+                let key = uuidText(projectID.rawValue)
+                guard try ProjectRecord.filter(Column("id") == key).fetchOne(db) != nil else {
+                    throw StoreError.notFound("project \(projectID.rawValue)")
+                }
+                try ProjectRecord.filter(Column("id") == key)
+                    .updateAll(db, Column("position").set(to: Int64(offset)))
+            }
+        }
+    }
+
+    /// Deletes the project row and its scene/shot document rows in one
+    /// transaction (planner cascade). Take ledgers are append-only evidence
+    /// and are never touched here — deleting a plan does not erase history.
     public func deleteProject(_ id: ProjectID) throws {
         try writer.write { db in
-            _ = try ProjectRecord
+            guard try ProjectRecord.filter(Column("id") == uuidText(id.rawValue)).fetchOne(db) != nil
+            else { throw StoreError.notFound("project \(id.rawValue)") }
+            if let record: ProjectRecord = try ProjectRecord
                 .filter(Column("id") == uuidText(id.rawValue))
-                .deleteAll(db)
+                .fetchOne(db)
+            {
+                let project = try record.toDomain()
+                for sceneID in project.sceneIDs {
+                    // Tolerant cascade: a listed-but-missing scene row is a
+                    // dangling id — skip it, never fail the user's delete.
+                    _ = try Self.deleteSceneRowsTransaction(db, id: sceneID)
+                }
+            }
+            _ = try ProjectRecord.filter(Column("id") == uuidText(id.rawValue)).deleteAll(db)
+        }
+    }
+
+    /// Deletes the scene row and its shot document rows (planner cascade);
+    /// take history is preserved.
+    public func deleteScene(_ id: SceneID) throws {
+        try writer.write { db in
+            let deleted = try Self.deleteSceneRowsTransaction(db, id: id)
+            guard deleted else { throw StoreError.notFound("scene \(id.rawValue)") }
+        }
+    }
+
+    @discardableResult
+    private static func deleteSceneRowsTransaction(_ db: Database, id: SceneID) throws -> Bool {
+        guard let record: SceneRecord = try SceneRecord
+            .filter(Column("id") == uuidText(id.rawValue))
+            .fetchOne(db)
+        else { return false }
+        let scene = try record.toDomain()
+        for shotID in scene.shotIDs {
+            _ = try ShotRecord.filter(Column("id") == uuidText(shotID.rawValue)).deleteAll(db)
+        }
+        _ = try SceneRecord.filter(Column("id") == uuidText(id.rawValue)).deleteAll(db)
+        return true
+    }
+
+    /// Deletes one shot document row; take history is preserved.
+    public func deleteShot(_ id: ShotID) throws {
+        try writer.write { db in
+            let deleted = try ShotRecord.filter(Column("id") == uuidText(id.rawValue)).deleteAll(db)
+            guard deleted > 0 else { throw StoreError.notFound("shot \(id.rawValue)") }
         }
     }
 
@@ -401,7 +525,7 @@ public final class ShotDeckStore: Sendable {
 
     public func snapshot() throws -> Snapshot {
         try writer.read { db in
-            let projects = try ProjectRecord.order(Column("sort_key")).fetchAll(db)
+            let projects = try ProjectRecord.order(Column("position"), Column("sort_key")).fetchAll(db)
                 .map { try $0.toDomain() }
             let scenes = try SceneRecord.order(Column("position")).fetchAll(db)
                 .map { try $0.toDomain() }

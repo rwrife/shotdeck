@@ -169,8 +169,14 @@ public enum Fixture {
 
     static func seedV1Data(_ db: Database) throws {
         for (offset, project) in projects().enumerated() {
-            var record = try ProjectRecord.from(domain: project)
-            // Deterministic visible ordering independent of title text.
+            // v1 has no project.position column — write the v1 subset.
+            var record = V1ProjectRow(
+                id: uuidText(project.id.rawValue),
+                title: project.title,
+                status: project.status.rawValue,
+                scene_ids: try encodeJSONBLOB(project.sceneIDs.map { uuidText($0.rawValue) }),
+                sort_key: ""
+            )
             record.sort_key = "v1fixture-\(String(format: "%04d", offset)):\(record.id)"
             try record.insert(db)
         }
@@ -179,7 +185,21 @@ public enum Fixture {
             try sceneRecord.insert(db)
         }
         for (offset, shot) in shots().enumerated() {
-            var shotRecord = try ShotRecord.from(domain: shot, position: Int64(offset))
+            // v1 has no planner-metadata columns — write the v1 subset.
+            let requiredJSON: String?
+            if let ids = shot.requiredContinuityCheckIDs {
+                requiredJSON = try encodeJSONBLOB(ids.map { uuidText($0.rawValue) })
+            } else {
+                requiredJSON = "null"
+            }
+            var shotRecord = V1ShotRow(
+                id: uuidText(shot.id.rawValue),
+                scene_id: uuidText(shot.sceneID.rawValue),
+                title: shot.title,
+                status: shot.status.rawValue,
+                required_ids: requiredJSON,
+                position: Int64(offset)
+            )
             try shotRecord.insert(db)
         }
         for (offset, take) in takes().enumerated() {

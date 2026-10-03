@@ -6,7 +6,7 @@ Local-first iPhone shot-list and continuity workspace for solo creators: plan fr
 
 ShotDeck helps solo filmmakers, photographers, and small volunteer crews move from a planned shot list to an honest record of what was captured. A project contains ordered scenes and shots; each shot can carry framing notes, a reference image, continuity checks, and append-only take records. The app derives coverage from that ledger instead of asking users to remember which angles still need work.
 
-This repository now includes a native Swift iPhone-only skeleton (`ShotDeck.xcodeproj`, `Packages/ShotDeckKit`) plus CI gates for exact toolchain pinning, zero-network enforcement, native-only framework policy, and iPhone-only bundle metadata. App features, persistence, and release automation beyond the scaffold are tracked as follow-up issues.
+This repository now includes the native Swift iPhone-only app shell (`ShotDeck.xcodeproj`, `ShotDeck/`, `ShotDeckUITests/`), the pure domain package (`Packages/ShotDeckKit`) with the planner model, the local SQLite store (`Packages/ShotDeckStore`, schema v3), and the accessible shot planner UI (projects → scenes → ordered shot list/editor with tags, framing metadata, archive/omit states, and non-color-only status). CI gates cover exact toolchain pinning, zero-network enforcement, native-only framework policy, iPhone-only bundle metadata, and the planner UI journey. The shoot workspace, exports, and release automation remain tracked as follow-up issues.
 
 ## Motivation
 

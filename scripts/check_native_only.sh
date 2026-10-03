@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-scan_roots=(ShotDeck ShotDeck.xcodeproj Packages scripts)
+scan_roots=(ShotDeck ShotDeckUITests ShotDeck.xcodeproj Packages scripts)
 for manifest in package.json pubspec.yaml settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
   [ -e "$manifest" ] && scan_roots+=("$manifest")
 done

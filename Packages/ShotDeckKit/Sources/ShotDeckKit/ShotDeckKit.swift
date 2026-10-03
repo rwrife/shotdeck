@@ -7,5 +7,5 @@ public enum ShotDeckKit {
     public static let domain = "ShotDeckKit"
 
     /// Tracks the milestone delivered by this package revision.
-    public static let milestone = "M2-domain-coverage"
+    public static let milestone = "M3-planner"
 }

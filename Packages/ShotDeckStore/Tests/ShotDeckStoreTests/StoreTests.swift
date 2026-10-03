@@ -30,7 +30,7 @@ struct MigrationTests {
     func freshStoreSchema() throws {
         let (store, _) = try TestSupport.makeStore(name: "fresh")
         let applied = try store.appliedMigrations()
-        #expect(applied == [Schema.migrationV1, Schema.migrationV2])
+        #expect(applied == [Schema.migrationV1, Schema.migrationV2, Schema.migrationV3])
         #expect(try store.schemaVersion() == Schema.currentVersion)
     }
 
@@ -52,7 +52,7 @@ struct MigrationTests {
         try Fixture.seedV1(fileQueue)
 
         let upgraded = try ShotDeckStore(url: url)
-        #expect(try upgraded.appliedMigrations() == [Schema.migrationV1, Schema.migrationV2])
+        #expect(try upgraded.appliedMigrations() == [Schema.migrationV1, Schema.migrationV2, Schema.migrationV3])
         #expect(try upgraded.schemaVersion() == Schema.currentVersion)
     }
 
@@ -141,7 +141,7 @@ struct FixtureLosslessTests {
         let scratchURL = scratchDir.appendingPathComponent(Fixture.fixtureFileName)
         try FileManager.default.copyItem(at: fixtureURL, to: scratchURL)
         let store = try ShotDeckStore(url: scratchURL)
-        #expect(try store.appliedMigrations() == [Schema.migrationV1, Schema.migrationV2])
+        #expect(try store.appliedMigrations() == [Schema.migrationV1, Schema.migrationV2, Schema.migrationV3])
         let snapshot = try store.snapshot()
         #expect(snapshot.projects == Fixture.projects())
         #expect(snapshot.scenes == Fixture.scenes())

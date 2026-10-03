@@ -93,6 +93,7 @@ A single `ShootWorkspaceLayout` abstraction owns pane arrangement and fold-state
 - Add deterministic unit/integration tests.
 
 ### M3 — Core planning workflow
+*(Planner slice delivered in issue #4: `ShotDeck` app now runs the planner flow — project list/create/edit/delete, scene list with reorder + status cycling, ordered shot-list editor with move/insert, archive & omit states, user-owned reusable framing tags, lens/orientation/movement metadata, action notes, and reference metadata fields. All planner logic lives in the pure `PlannerModel` in `Packages/ShotDeckKit` (Linux + Apple tested); persistence gained schema `v3-planner-metadata` (shot planner columns + explicit project order) in `Packages/ShotDeckStore`. Non-color status = glyph + spoken text on every row, VoiceOver labels/hints on all controls, Dynamic Type via system fonts/`.caption` styles, and an XCUITest journey asserting the accessibility identifiers.)*
 
 - Build project/scene/shot CRUD.
 - Add ordering, tagging, and validation states.

@@ -91,10 +91,15 @@ public struct Scene: Equatable, Codable, Sendable {
     }
 }
 
-public enum ShotStatus: String, Codable, Sendable {
+public enum ShotStatus: String, Codable, CaseIterable, Sendable {
     case planned
     case active
+    /// Explicitly excluded from the shoot plan.
     case omitted
+    /// Pulled from the active plan without an explicit omission decision;
+    /// coverage derives to `omitted` with the `shot_archived` reason so the
+    /// two exclusions stay distinguishable.
+    case archived
     case unknown
 }
 
@@ -107,18 +112,87 @@ public struct Shot: Equatable, Codable, Sendable {
     /// explicitly means this shot has no continuity requirements.
     public var requiredContinuityCheckIDs: [ContinuityCheckID]?
 
+    // Planner metadata (issue #4). Every field keeps an explicit absence:
+    // empty tags/notes mean the operator entered none; `nil` optional
+    // fields mean "not provided" and are never fabricated by the app.
+    public var framingTags: [String]
+    public var lensDescription: String?
+    public var orientation: ShotOrientation?
+    public var movement: ShotMovement?
+    public var actionNotes: String
+    public var referenceFilename: String?
+    public var referenceCaption: String?
+
     public init(
         id: ShotID = ShotID(),
         sceneID: SceneID,
         title: String,
         status: ShotStatus = .planned,
-        requiredContinuityCheckIDs: [ContinuityCheckID]? = []
+        requiredContinuityCheckIDs: [ContinuityCheckID]? = [],
+        framingTags: [String] = [],
+        lensDescription: String? = nil,
+        orientation: ShotOrientation? = nil,
+        movement: ShotMovement? = nil,
+        actionNotes: String = "",
+        referenceFilename: String? = nil,
+        referenceCaption: String? = nil
     ) {
         self.id = id
         self.sceneID = sceneID
         self.title = title
         self.status = status
         self.requiredContinuityCheckIDs = requiredContinuityCheckIDs
+        self.framingTags = framingTags
+        self.lensDescription = lensDescription
+        self.orientation = orientation
+        self.movement = movement
+        self.actionNotes = actionNotes
+        self.referenceFilename = referenceFilename
+        self.referenceCaption = referenceCaption
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sceneID
+        case title
+        case status
+        case requiredContinuityCheckIDs
+        case framingTags
+        case lensDescription
+        case orientation
+        case movement
+        case actionNotes
+        case referenceFilename
+        case referenceCaption
+    }
+
+    /// Custom decoder so pre-issue-#4 payloads (missing planner keys) stay
+    /// readable, and unknown orientation/movement strings degrade to `nil`
+    /// instead of failing the whole decode — unknown-safe, never guessing.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(ShotID.self, forKey: .id)
+        sceneID = try values.decode(SceneID.self, forKey: .sceneID)
+        title = try values.decode(String.self, forKey: .title)
+        status = try values.decode(ShotStatus.self, forKey: .status)
+        requiredContinuityCheckIDs = try values.decodeIfPresent(
+            [ContinuityCheckID].self, forKey: .requiredContinuityCheckIDs
+        )
+        framingTags = try values.decodeIfPresent([String].self, forKey: .framingTags) ?? []
+        lensDescription = try values.decodeIfPresent(String.self, forKey: .lensDescription)
+        if let raw = try values.decodeIfPresent(String.self, forKey: .orientation) {
+            orientation = ShotOrientation(rawValue: raw)
+        } else {
+            orientation = nil
+        }
+        if let raw = try values.decodeIfPresent(String.self, forKey: .movement) {
+            movement = ShotMovement(rawValue: raw)
+        } else {
+            movement = nil
+        }
+        actionNotes = try values.decodeIfPresent(String.self, forKey: .actionNotes) ?? ""
+        referenceFilename = try values.decodeIfPresent(String.self, forKey: .referenceFilename)
+        referenceCaption = try values.decodeIfPresent(String.self, forKey: .referenceCaption)
     }
 }
 
@@ -349,6 +423,8 @@ public enum CoverageReason: String, Codable, Sendable {
     case candidateNotSelected = "candidate_not_selected"
     case explicitCandidateSelected = "explicit_candidate_selected"
     case explicitlyOmitted = "explicitly_omitted"
+    /// Excluded from the plan by archiving rather than an explicit omission.
+    case shotArchived = "shot_archived"
     case shotStatusUnknown = "shot_status_unknown"
     case takeLedgerUnavailable = "take_ledger_unavailable"
     case takeLedgerShotMismatch = "take_ledger_shot_mismatch"
@@ -402,6 +478,9 @@ public enum CoverageEngine {
         }
         if shot.status == .omitted {
             return summary(shot, .omitted, [.explicitlyOmitted], ledger)
+        }
+        if shot.status == .archived {
+            return summary(shot, .omitted, [.shotArchived], ledger)
         }
         guard let ledger else {
             return summary(shot, .unknown, [.takeLedgerUnavailable], nil)

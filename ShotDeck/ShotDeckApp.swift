@@ -9,9 +9,12 @@ import ShotDeckKit
 /// package sources — CI enforces an empty-allowlist scan.
 @main
 struct ShotDeckApp: App {
+    @State private var planner = PlannerStore()
+
     var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView()
+                .environment(planner)
         }
     }
 }

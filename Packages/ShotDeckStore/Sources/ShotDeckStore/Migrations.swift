@@ -10,9 +10,10 @@ import GRDB
 public enum Schema {
     public static let migrationV1 = "v1-initial"
     public static let migrationV2 = "v2-take-revisions-and-candidates"
+    public static let migrationV3 = "v3-planner-metadata"
 
     /// Highest schema version defined by this build of the app.
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     /// All migrations for a fresh or existing store.
     static func fullMigrator() -> DatabaseMigrator {
@@ -23,6 +24,7 @@ public enum Schema {
         #endif
         registerV1(&migrator)
         registerV2(&migrator)
+        registerV3(&migrator)
         return migrator
     }
 
@@ -107,6 +109,28 @@ public enum Schema {
                 t.column("selection_kind", .text).notNull()
                 t.column("take_id", .text)
             }
+        }
+    }
+
+    private static func registerV3(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration(migrationV3) { db in
+            // Planner metadata for shots (issue #4). Defaults encode the
+            // honest pre-issue-#4 state: no tags, no notes, no reference —
+            // never a fabricated value.
+            try db.alter(table: "shot") { t in
+                t.add(column: "framing_tags", .text).notNull().defaults(to: "[]")
+                t.add(column: "lens_description", .text)
+                t.add(column: "orientation", .text)
+                t.add(column: "movement", .text)
+                t.add(column: "action_notes", .text).notNull().defaults(to: "")
+                t.add(column: "reference_filename", .text)
+                t.add(column: "reference_caption", .text)
+            }
+            // Project list becomes explicitly reorderable like scenes/shots.
+            try db.alter(table: "project") { t in
+                t.add(column: "position", .integer).notNull().defaults(to: 0)
+            }
+            try db.create(index: "project_position", on: "project", columns: ["position"])
         }
     }
 }

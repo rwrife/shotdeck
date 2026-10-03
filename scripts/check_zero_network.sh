@@ -10,7 +10,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ROOTS=("ShotDeck" "Packages")
+ROOTS=("ShotDeck" "ShotDeckUITests" "Packages")
 ALLOWLIST=()   # empty by design; extend only with explicit user sign-off
 
 PATTERNS=(

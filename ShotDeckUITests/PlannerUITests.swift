@@ -1,0 +1,138 @@
+import XCTest
+
+/// Planner journeys (issue #4) against the real app, exercising the
+/// accessibility identifiers and non-color status labels VoiceOver users
+/// depend on. Run on the pinned Apple toolchain in CI.
+final class PlannerUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+        app = XCUIApplication()
+        // `PlannerStore` gives every `--ui-tests` launch a fresh temp
+        // database, so journeys always start from an honest empty state.
+        app.launchArguments = ["--ui-tests"]
+        app.launch()
+    }
+
+    override func tearDown() {
+        app = nil
+        super.tearDown()
+    }
+
+    /// Resolve by accessibilityIdentifier across any element class —
+    /// SwiftUI surfaces TextFields/TextEditors/Pickers differently per
+    /// container, but the identifier always rides on the element itself.
+    private func element(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any)[id].firstMatch
+    }
+
+    private func expectElement(_ id: String, timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {
+        let target = element(id)
+        if !target.waitForExistence(timeout: timeout) {
+            XCTFail("Missing element '\(id)'. Reachable ids: \(reachableIds())", file: file, line: line)
+        }
+    }
+
+    private func expectStatusText(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", text)
+        let match = app.descendants(matching: .any).matching(predicate).firstMatch
+        if !match.waitForExistence(timeout: 5) {
+            XCTFail("Missing status text '\(text)'. Reachable ids: \(reachableIds())", file: file, line: line)
+        }
+    }
+
+    /// One-shot diagnostic provenance on failure (kept cheap, used only in
+    /// failure paths): identifiers that exist in the current tree.
+    private func reachableIds() -> String {
+        app.descendants(matching: .any).allElementsBoundByIndex.prefix(200)
+            .map(\.identifier).filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    private func tap(_ id: String, file: StaticString = #filePath, line: UInt = #line) {
+        expectElement(id, file: file, line: line)
+        element(id).tap()
+    }
+
+    private func type(_ id: String, _ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        expectElement(id, file: file, line: line)
+        let field = element(id)
+        field.tap()
+        field.typeText(text)
+    }
+
+    func testPlannerJourney() throws {
+        // 1. Empty state + project creation.
+        expectElement("projectList.emptyState")
+        tap("project.createButton")
+        type("project.create.titleField", "Journey Project")
+        tap("project.create.confirm")
+
+        // 2. Project row shows non-color-only status text.
+        expectElement("projectRow.index.0")
+        expectStatusText("Project status: active")
+        tap("projectRow.index.0")
+
+        // 3. Scene creation with trimmed title.
+        expectElement("sceneList.emptyState")
+        tap("scene.addButton")
+        type("scene.add.titleField", "Lobby")
+        tap("scene.add.confirm")
+        expectElement("sceneRow.index.0")
+        expectStatusText("Scene status: planned")
+        tap("sceneRow.index.0")
+
+        // 4. Shot creation + unknown-safe coverage badge.
+        expectElement("shotList.emptyState")
+        tap("shot.addButton")
+        type("shot.add.titleField", "Wide establishing")
+        tap("shot.add.confirm")
+        expectElement("shotRow.index.0")
+        // No ledger exists yet, so the badge must say unknown — never
+        // silently "attempted".
+        expectStatusText("Coverage: unknown")
+
+        // 5. Editor: tag, lens, orientation, notes.
+        tap("shotRow.index.0")
+        expectElement("shotEditor.titleField")
+        type("shotEditor.tagField", "wide")
+        tap("shotEditor.tagAddButton")
+        type("shotEditor.lensField", "35mm prime")
+        tap("shotEditor.orientationPicker")
+        let orientationOption = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Portrait")).firstMatch
+        XCTAssertTrue(
+            orientationOption.waitForExistence(timeout: 5),
+            "Portrait option missing. Reachable ids: \(reachableIds())"
+        )
+        orientationOption.tap()
+        type("shotEditor.notesField", "Talent enters left")
+        tap("shotEditor.save")
+
+        // The tag now shows on the shot row.
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label CONTAINS[c] %@", "wide")).firstMatch
+                .waitForExistence(timeout: 5),
+            "tag missing on row. Reachable ids: \(reachableIds())"
+        )
+
+        // 6. Swipe status cycle -> active.
+        element("shotRow.index.0").swipeLeft()
+        tap("shot.cycleStatus.index.0")
+        expectStatusText("Shot status: active")
+
+        // 7. Omit via leading swipe; coverage follows to omitted.
+        element("shotRow.index.0").swipeRight()
+        tap("shot.omit.index.0")
+        expectStatusText("Shot status: omitted")
+        expectStatusText("Coverage: omitted")
+
+        // 8. Delete with confirmation dialog.
+        element("shotRow.index.0").swipeLeft()
+        tap("shot.delete.index.0")
+        tap("shot.delete.confirm")
+        expectElement("shotList.emptyState")
+    }
+}

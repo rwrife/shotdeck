@@ -1,24 +1,16 @@
 import SwiftUI
 import ShotDeckKit
 
-/// Skeleton root view. The shot planner editor (issue #4) replaces this;
-/// the shoot workspace arranges panes through `ShootWorkspaceLayout`
-/// (issue #5).
+/// ShotDeck app root (issue #4): the planner flow — project list →
+/// scene list → shot list/editor. The shoot workspace (issue #5)
+/// will hang off the same document once take capture lands.
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 8) {
-            Text("ShotDeck")
-                .font(.title)
-                .accessibilityAddTraits(.isHeader)
-            Text(ShotDeckKit.milestone)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .accessibilityElement(children: .combine)
+        ProjectListView()
     }
 }
 
 #Preview {
     ContentView()
+        .environment(PlannerStore())
 }

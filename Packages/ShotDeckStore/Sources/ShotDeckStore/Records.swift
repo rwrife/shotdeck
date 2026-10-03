@@ -73,15 +73,19 @@ struct ProjectRecord: Codable, FetchableRecord, MutablePersistableRecord {
     var status: String
     var scene_ids: String
     var sort_key: String
+    /// Explicit project list position (v3). Tie-breaks fall back to sort_key
+    /// so pre-v3 data keeps its original visible order.
+    var position: Int64
 
-    static func from(domain project: Project) throws -> ProjectRecord {
+    static func from(domain project: Project, position: Int64 = 0) throws -> ProjectRecord {
         ProjectRecord(
             id: uuidText(project.id.rawValue),
             title: project.title,
             status: project.status.rawValue,
             scene_ids: try encodeJSONBLOB(project.sceneIDs.map { uuidText($0.rawValue) }),
             sort_key: ProjectRecord.defaultSortKey(
-                title: project.title, id: uuidText(project.id.rawValue))
+                title: project.title, id: uuidText(project.id.rawValue)),
+            position: position
         )
     }
 
@@ -160,6 +164,14 @@ struct ShotRecord: Codable, FetchableRecord, MutablePersistableRecord {
     /// continuity requirements are unavailable (domain `.unknown`-safe path).
     var required_ids: String?
     var position: Int64
+    // Planner metadata (v3, issue #4).
+    var framing_tags: String
+    var lens_description: String?
+    var orientation: String?
+    var movement: String?
+    var action_notes: String
+    var reference_filename: String?
+    var reference_caption: String?
 
     static func from(domain shot: Shot, position: Int64) throws -> ShotRecord {
         let requiredJSON: String?
@@ -174,7 +186,14 @@ struct ShotRecord: Codable, FetchableRecord, MutablePersistableRecord {
             title: shot.title,
             status: shot.status.rawValue,
             required_ids: requiredJSON,
-            position: position
+            position: position,
+            framing_tags: try encodeJSONBLOB(shot.framingTags),
+            lens_description: shot.lensDescription,
+            orientation: shot.orientation?.rawValue,
+            movement: shot.movement?.rawValue,
+            action_notes: shot.actionNotes,
+            reference_filename: shot.referenceFilename,
+            reference_caption: shot.referenceCaption
         )
     }
 
@@ -191,12 +210,22 @@ struct ShotRecord: Codable, FetchableRecord, MutablePersistableRecord {
         } else {
             requiredIDs = nil
         }
+        let framingTags: [String] = try decodeJSONBLOB(framing_tags, field: "shot.framing_tags")
         return Shot(
             id: ShotID(rawValue: try parseUUID(id, field: "shot.id")),
             sceneID: SceneID(rawValue: try parseUUID(scene_id, field: "shot.scene_id")),
             title: title,
             status: status,
-            requiredContinuityCheckIDs: requiredIDs
+            requiredContinuityCheckIDs: requiredIDs,
+            framingTags: framingTags,
+            lensDescription: lens_description,
+            // Unknown stored strings decode to explicit absence, never a
+            // guessed value — same unknown-safe rule as the domain decoder.
+            orientation: orientation.flatMap { ShotOrientation(rawValue: $0) },
+            movement: movement.flatMap { ShotMovement(rawValue: $0) },
+            actionNotes: action_notes,
+            referenceFilename: reference_filename,
+            referenceCaption: reference_caption
         )
     }
 }
@@ -339,4 +368,27 @@ struct V1TakeRow: Codable, FetchableRecord, MutablePersistableRecord {
     var camera_description: String?
     var rating: String
     var notes: String
+}
+
+/// The v1 subset of `shot` columns (pre-planner-metadata schema).
+struct V1ShotRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "shot"
+
+    var id: String
+    var scene_id: String
+    var title: String
+    var status: String
+    var required_ids: String?
+    var position: Int64
+}
+
+/// The v1 subset of `project` columns (pre-project-position schema).
+struct V1ProjectRow: Codable, FetchableRecord, MutablePersistableRecord {
+    static let databaseTableName = "project"
+
+    var id: String
+    var title: String
+    var status: String
+    var scene_ids: String
+    var sort_key: String
 }

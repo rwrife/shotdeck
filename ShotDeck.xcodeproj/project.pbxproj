@@ -409,12 +409,20 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/ShotDeckKit;
 		};
+		AA00000000000000000000B9 /* XCLocalSwiftPackageReference "Packages/ShotDeckStore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ShotDeckStore;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		AA00000000000000000000AF /* ShotDeckKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ShotDeckKit;
+		};
+		AA00000000000000000000B8 /* ShotDeckStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ShotDeckStore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

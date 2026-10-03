@@ -47,7 +47,9 @@ final class PlannerUITests: XCTestCase {
     /// failure paths): identifiers that exist in the current tree.
     private func reachableIds() -> String {
         app.descendants(matching: .any).allElementsBoundByIndex.prefix(200)
-            .map(\.identifier).filter { !$0.isEmpty }.joined(separator: ", ")
+            // Closure, not key path: `identifier` is MainActor-isolated and
+            // key paths to it can't be formed here under Swift 6.
+            .map { $0.identifier }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     private func tap(_ id: String, file: StaticString = #filePath, line: UInt = #line) {

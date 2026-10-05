@@ -314,3 +314,56 @@ struct CandidateSelectionTests {
         }
     }
 }
+
+@Suite("Shoot workspace persistence")
+struct ShootWorkspaceStoreTests {
+    @Test("session replay follows insertion order even when timestamps are equal, after reopen")
+    func restore() throws {
+        let (store, url) = try TestSupport.makeStore(name: "session-reopen")
+        let project = Fixture.projectID
+        let shot = Fixture.shotIDA1
+        let now = Date(timeIntervalSince1970: 1234)
+        try store.appendSessionEvent(SessionEvent(projectID: project, occurredAt: now, kind: .sessionStarted))
+        try store.appendSessionEvent(SessionEvent(projectID: project, occurredAt: now, kind: .shotSelected, shotID: shot))
+        let reopened = try ShotDeckStore(url: url)
+        #expect(ShootSessionContext.restore(try reopened.sessionEvents(in: project), validShotIDs: [shot]) == .active(shot))
+    }
+
+    @Test("continuity creation atomically adds a required check and preserves unresolved status")
+    func continuity() throws {
+        let (store, url) = try TestSupport.makeStore(name: "continuity")
+        let shot = Fixture.shots()[1]
+        try store.saveShot(shot, position: 0)
+        let check = ContinuityCheck(shotID: shot.id, label: "Wardrobe")
+        try store.addRequiredContinuityCheck(check, to: shot)
+        let reopened = try ShotDeckStore(url: url)
+        #expect(try reopened.shot(shot.id).requiredContinuityCheckIDs == [check.id])
+        #expect(try reopened.continuityChecks(for: shot.id) == [check])
+        let summary = CoverageEngine.derive(shot: try reopened.shot(shot.id),
+                                            ledger: try reopened.takeLedger(for: shot.id),
+                                            continuityChecks: try reopened.continuityChecks(for: shot.id))
+        #expect(summary.state != .candidateSelected)
+    }
+
+    @Test("candidate event is atomic and a take from a different shot is refused")
+    func candidateIntegrity() throws {
+        let (store, _) = try TestSupport.makeStore(name: "candidate-event")
+        let take = Fixture.takes()[0]
+        try store.appendTake(take)
+        let event = SessionEvent(projectID: Fixture.projectID, occurredAt: .now,
+                                 kind: .candidateChanged, shotID: Fixture.shotIDA2, takeID: take.id)
+        #expect(throws: StoreError.self) {
+            try store.selectCandidate(take.id, for: Fixture.shotIDA2, event: event)
+        }
+        #expect(try store.sessionEvents(in: Fixture.projectID).isEmpty)
+        #expect(try store.candidateSelection(for: Fixture.shotIDA2) == .unresolved)
+        let valid = SessionEvent(projectID: Fixture.projectID, occurredAt: .now,
+                                 kind: .candidateChanged, shotID: take.shotID, takeID: take.id)
+        try store.selectCandidate(take.id, for: take.shotID, event: valid)
+        #expect(try store.candidateSelection(for: take.shotID) == .selected(take.id))
+        let savedEvents = try store.sessionEvents(in: Fixture.projectID)
+        #expect(savedEvents.count == 1)
+        #expect(savedEvents.first?.id == valid.id)
+        #expect(savedEvents.first?.takeID == take.id)
+    }
+}

@@ -431,6 +431,27 @@ public final class ShotDeckStore: Sendable {
         }
     }
 
+    /// One atomic selection + audit event. Foreign-shot or superseded takes
+    /// cannot be promoted to candidates.
+    public func selectCandidate(_ id: TakeID, for shotID: ShotID, event: SessionEvent) throws {
+        try writer.write { db in
+            guard event.kind == .candidateChanged, event.shotID == shotID, event.takeID == id,
+                  let take = try TakeRecord.filter(Column("id") == uuidText(id.rawValue))
+                    .fetchOne(db), take.shot_id == uuidText(shotID.rawValue) else {
+                throw StoreError.ledger(.candidateTakeMissing(id))
+            }
+            let ledger = try Self.ledgerTransaction(db, shotID: shotID)
+            guard ledger.currentTakes.contains(where: { $0.id == id }) else {
+                throw StoreError.ledger(.candidateTakeMissing(id))
+            }
+            var candidate = ShotCandidateRecord(shot_id: uuidText(shotID.rawValue),
+                                                 selection_kind: "selected", take_id: uuidText(id.rawValue))
+            try candidate.save(db)
+            var record = try SessionEventRecord.from(domain: event)
+            try record.insert(db)
+        }
+    }
+
     private static func candidateSelectionTransaction(
         _ db: Database, shotID: ShotID
     ) throws -> CandidateTakeSelection {
@@ -459,6 +480,28 @@ public final class ShotDeckStore: Sendable {
         }
     }
 
+    /// Add a required check and its shot reference together. Persisting a
+    /// check without its requirement would silently drop it from coverage.
+    public func addRequiredContinuityCheck(_ check: ContinuityCheck, to shot: Shot) throws {
+        guard check.shotID == shot.id else { throw StoreError.notFound("check shot mismatch") }
+        try writer.write { db in
+            let key = uuidText(shot.id.rawValue)
+            guard let position: Int64 = try Int64.fetchOne(db,
+                sql: "SELECT position FROM shot WHERE id = ?", arguments: [key]) else {
+                throw StoreError.notFound("shot \(shot.id.rawValue)")
+            }
+            var edited = shot
+            var required = edited.requiredContinuityCheckIDs ?? []
+            guard !required.contains(check.id) else { throw StoreError.notFound("duplicate check") }
+            required.append(check.id)
+            edited.requiredContinuityCheckIDs = required
+            var record = try ContinuityCheckRecord.from(domain: check)
+            try record.insert(db)
+            var shotRecord = try ShotRecord.from(domain: edited, position: position)
+            try shotRecord.save(db)
+        }
+    }
+
     public func continuityChecks(for shotID: ShotID) throws -> [ContinuityCheck] {
         try writer.read { db in
             try ContinuityCheckRecord
@@ -482,7 +525,8 @@ public final class ShotDeckStore: Sendable {
         try writer.read { db in
             try SessionEventRecord
                 .filter(Column("project_id") == uuidText(projectID.rawValue))
-                .order(Column("occurred_at"), Column("id"))
+                // Restore in insertion order, even if timestamps tie or a clock rolls back.
+                .order(sql: "rowid")
                 .fetchAll(db)
                 .map { try $0.toDomain() }
         }

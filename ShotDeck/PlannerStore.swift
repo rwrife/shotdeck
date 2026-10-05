@@ -78,9 +78,9 @@ final class PlannerStore {
 
     func project(_ id: ProjectID) -> Project? { model.project(id) }
 
-    func scene(_ id: SceneID) -> ShotDeckKit.Scene? { model.scene(id) }
+    func scene(_ id: SceneID) -> Scene? { model.scene(id) }
     func shot(_ id: ShotID) -> Shot? { model.shot(id) }
-    func scenes(in projectID: ProjectID) -> [ShotDeckKit.Scene] { model.scenes(in: projectID) }
+    func scenes(in projectID: ProjectID) -> [Scene] { model.scenes(in: projectID) }
     func shots(in sceneID: SceneID) -> [Shot] { model.shots(in: sceneID) }
 
     /// No cached green status: each query reads the actual ledger and checks.

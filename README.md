@@ -6,7 +6,7 @@ Local-first iPhone shot-list and continuity workspace for solo creators: plan fr
 
 ShotDeck helps solo filmmakers, photographers, and small volunteer crews move from a planned shot list to an honest record of what was captured. A project contains ordered scenes and shots; each shot can carry framing notes, a reference image, continuity checks, and append-only take records. The app derives coverage from that ledger instead of asking users to remember which angles still need work.
 
-This repository now includes the native Swift iPhone-only app shell (`ShotDeck.xcodeproj`, `ShotDeck/`, `ShotDeckUITests/`), the pure domain package (`Packages/ShotDeckKit`) with the planner model, the local SQLite store (`Packages/ShotDeckStore`, schema v3), and the accessible shot planner UI (projects → scenes → ordered shot list/editor with tags, framing metadata, archive/omit states, and non-color-only status). CI gates cover exact toolchain pinning, zero-network enforcement, native-only framework policy, iPhone-only bundle metadata, and the planner UI journey. The shoot workspace, exports, and release automation remain tracked as follow-up issues.
+This repository includes the native Swift iPhone-only app shell (`ShotDeck.xcodeproj`, `ShotDeck/`, `ShotDeckUITests/`), the pure domain package (`Packages/ShotDeckKit`), the local SQLite store (`Packages/ShotDeckStore`, schema v3), the accessible shot planner, and a shoot workspace. CI gates cover exact toolchain pinning, zero-network enforcement, native-only framework policy, iPhone-only bundle metadata, and UI journeys. Backup/restore, reports, and release automation remain tracked as follow-up issues.
 
 ## Motivation
 
@@ -47,6 +47,12 @@ Large production suites optimize for crews, accounts, subscriptions, and cloud c
 The future dual-screen workspace gives each display a stable job: one screen holds the selected shot, reference still, and continuity checklist while the other remains a large take-control surface and coverage queue. Selection, active session state, and draft notes must survive folding or unfolding.
 
 The current build shape is a standard native iPhone app. Native iPad support is disabled by default. No unavailable foldable or hinge API is required. When Apple publishes supported dual-screen APIs, `ShootWorkspaceLayout` will translate safe regions, pane placement, and fold transitions without changing the domain or persistence layers. Tablet layouts remain deferred unless the user explicitly opts in.
+
+## Shoot workspace (local-only)
+
+From a scene's shot list, open **Shoot workspace** and choose a shot to start or change the active session. The large **Log take** button appends an immutable record with a timestamp, rating, notes, and optional user-entered duration (positive seconds) and camera/source. The take list permits explicit candidate selection; no latest-take auto-selection occurs. Missing duration or camera/source on a candidate produces **unknown** coverage rather than inventing capture facts. Add required continuity checks with a label; each starts **pending** until marked Matched, Mismatch, or Unresolved. Coverage reasons remain visible even when a candidate is selected. Ending a shoot clears the active shot; quitting and reopening replays the local session event log in append order, falling back to unresolved if a referenced shot is gone. A failed database open or write is surfaced, never treated as a successful capture.
+
+`ShootWorkspaceLayout` is a logic-only seam: folded and unknown map to one active-shot panel; unfolded maps to shot plus take-ledger panels. This is **not** a claim of fold detection or dual-screen hardware support. The app currently renders only the folded iPhone workspace.
 
 ## Platform contract
 

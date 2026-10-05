@@ -334,6 +334,7 @@ struct ShotListView: View {
     @State private var newShotTitle = ""
     @State private var editingShot: Shot?
     @State private var pendingDeletion: Shot?
+    @State private var showingShoot = false
     @State private var errorMessage: String?
 
     private var shots: [Shot] { store.shots(in: sceneID) }
@@ -344,6 +345,10 @@ struct ShotListView: View {
                 Text("No shots yet. Add the first shot to build this scene.")
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("shotList.emptyState")
+            }
+            if !shots.isEmpty {
+                Button("Open shoot workspace") { showingShoot = true }
+                    .accessibilityIdentifier("shoot.open")
             }
             ForEach(Array(shots.enumerated()), id: \.element.id) { index, shot in
                 Button {
@@ -407,6 +412,13 @@ struct ShotListView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
                     .accessibilityIdentifier("shot.reorderButton")
+            }
+        }
+        .sheet(isPresented: $showingShoot) {
+            if let projectID = store.scene(sceneID)?.projectID {
+                ShootWorkspaceView(projectID: projectID, sceneID: sceneID)
+            } else {
+                Text("Scene unavailable; shoot session not started.")
             }
         }
         // Shot is a value type with stable identity: sheet(item:) delivers a

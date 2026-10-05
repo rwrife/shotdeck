@@ -91,9 +91,8 @@ final class PlannerUITests: XCTestCase {
         type("shot.add.titleField", "Wide establishing")
         tap("shot.add.confirm")
         expectElement("shotRow.index.0")
-        // No ledger exists yet, so the badge must say unknown — never
-        // silently "attempted".
-        expectStatusText("Coverage: unknown")
+        // With the real empty ledger available, this is explicitly not started.
+        expectStatusText("Coverage: not started")
 
         // 5. Editor: tag, lens, orientation, notes.
         tap("shotRow.index.0")
@@ -136,5 +135,48 @@ final class PlannerUITests: XCTestCase {
         tap("shot.delete.index.0")
         tap("shot.delete.confirm")
         expectElement("shotList.emptyState")
+    }
+
+    func testShootJourneyRestoresSessionAndKeepsMissingFactsUnknown() throws {
+        let token = UUID().uuidString
+        app.terminate()
+        app.launchArguments = ["--ui-tests", "--ui-tests-persist", token]
+        app.launch()
+        tap("project.createButton")
+        type("project.create.titleField", "Shoot Project")
+        tap("project.create.confirm")
+        tap("projectRow.index.0")
+        tap("scene.addButton")
+        type("scene.add.titleField", "Exterior")
+        tap("scene.add.confirm")
+        tap("sceneRow.index.0")
+        tap("shot.addButton")
+        type("shot.add.titleField", "Arrival")
+        tap("shot.add.confirm")
+        tap("shoot.open")
+        XCTAssertTrue(element("shoot.context").label.contains("No active shoot"))
+        let select = app.buttons.matching(NSPredicate(format: "label == %@", "Shoot Arrival")).firstMatch
+        XCTAssertTrue(select.waitForExistence(timeout: 5))
+        select.tap()
+        XCTAssertTrue(element("shoot.context").label.contains("Active shoot: Arrival"))
+        tap("shoot.logTake")
+        expectElement("shoot.take.0")
+        tap("shoot.candidate.0")
+        // Candidate cannot become green: camera metadata is explicitly absent.
+        XCTAssertTrue(element("shoot.coverage").label.contains("unknown"))
+        type("shoot.checkLabel", "Wardrobe")
+        tap("shoot.addCheck")
+        expectStatusText("Wardrobe: pending")
+        tap("shoot.done")
+
+        app.terminate()
+        app.launch()
+        tap("projectRow.index.0")
+        tap("sceneRow.index.0")
+        tap("shoot.open")
+        XCTAssertTrue(element("shoot.context").label.contains("Active shoot: Arrival"))
+        expectElement("shoot.take.0")
+        expectStatusText("Wardrobe: pending")
+        XCTAssertTrue(element("shoot.coverage").label.contains("unknown"))
     }
 }

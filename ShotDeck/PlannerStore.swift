@@ -18,6 +18,8 @@ import ShotDeckStore
 final class PlannerStore {
     private var model: PlannerModel
     private let persistence: ShotDeckStore?
+    /// Invalidates derived coverage and session labels after durable writes.
+    private var shootRevision = 0
 
     /// Non-nil when the local store could not be opened or a write failed —
     /// surfaced verbatim in the UI instead of silently dropping edits.
@@ -42,8 +44,15 @@ final class PlannerStore {
     private static func openLocalStore() -> (store: ShotDeckStore?, model: PlannerModel, startupIssue: String?) {
         let url: URL
         if CommandLine.arguments.contains("--ui-tests") {
-            url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("shotdeck-uitests-\(UUID().uuidString).sqlite")
+            if let index = CommandLine.arguments.firstIndex(of: "--ui-tests-persist"),
+               CommandLine.arguments.indices.contains(index + 1),
+               let token = UUID(uuidString: CommandLine.arguments[index + 1]) {
+                url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("shotdeck-uitests-\(token.uuidString).sqlite")
+            } else {
+                url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("shotdeck-uitests-\(UUID().uuidString).sqlite")
+            }
         } else {
             let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             url = dir.appendingPathComponent("shotdeck.sqlite")
@@ -69,15 +78,119 @@ final class PlannerStore {
 
     func project(_ id: ProjectID) -> Project? { model.project(id) }
 
-    func scenes(in projectID: ProjectID) -> [Scene] { model.scenes(in: projectID) }
-
+    func scene(_ id: SceneID) -> ShotDeckKit.Scene? { model.scene(id) }
+    func shot(_ id: ShotID) -> Shot? { model.shot(id) }
+    func scenes(in projectID: ProjectID) -> [ShotDeckKit.Scene] { model.scenes(in: projectID) }
     func shots(in sceneID: SceneID) -> [Shot] { model.shots(in: sceneID) }
 
-    /// Coverage for a planned shot. The shoot workspace (issue #5) owns
-    /// take ledgers; until a ledger is loaded, `unknown`-safe derivation
-    /// from `nil` facts is the honest answer.
+    /// No cached green status: each query reads the actual ledger and checks.
+    /// A missing/unreadable database stays unknown, never "not started".
     func coverage(for shot: Shot) -> CoverageSummary {
-        CoverageEngine.derive(shot: shot, ledger: nil, continuityChecks: nil)
+        _ = shootRevision
+        guard let persistence,
+              let ledger = try? persistence.takeLedger(for: shot.id),
+              let checks = try? persistence.continuityChecks(for: shot.id) else {
+            return CoverageEngine.derive(shot: shot, ledger: nil, continuityChecks: nil)
+        }
+        return CoverageEngine.derive(shot: shot, ledger: ledger, continuityChecks: checks)
+    }
+
+    func session(in projectID: ProjectID) -> ShootSessionContext {
+        _ = shootRevision
+        guard let persistence,
+              let events = try? persistence.sessionEvents(in: projectID) else { return .unresolved }
+        return .restore(events, validShotIDs: Set(model.allShots(in: projectID).map(\.id)))
+    }
+
+    func ledger(for shotID: ShotID) throws -> TakeLedger {
+        _ = shootRevision
+        return try requireStore().takeLedger(for: shotID)
+    }
+
+    func continuity(for shotID: ShotID) throws -> [ContinuityCheck] {
+        _ = shootRevision
+        return try requireStore().continuityChecks(for: shotID)
+    }
+
+    private func requireStore() throws -> ShotDeckStore {
+        guard let persistence else {
+            throw NSError(domain: "ShotDeck", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Local database unavailable; shoot changes were not saved."])
+        }
+        return persistence
+    }
+
+    func selectShot(_ shotID: ShotID, in projectID: ProjectID) throws {
+        guard let shot = model.shot(shotID),
+              model.allShots(in: projectID).contains(where: { $0.id == shotID }),
+              shot.status != .omitted, shot.status != .archived else {
+            throw PlannerValidationError.unknownShot(shotID)
+        }
+        let store = try requireStore()
+        if session(in: projectID) == .inactive {
+            try store.appendSessionEvent(SessionEvent(projectID: projectID, occurredAt: .now,
+                                                      kind: .sessionStarted))
+        }
+        try store.appendSessionEvent(SessionEvent(projectID: projectID, occurredAt: .now,
+                                                  kind: .shotSelected, shotID: shotID))
+        shootRevision += 1
+    }
+
+    func endSession(in projectID: ProjectID) throws {
+        try requireStore().appendSessionEvent(SessionEvent(projectID: projectID, occurredAt: .now,
+                                                           kind: .sessionEnded))
+        shootRevision += 1
+    }
+
+    func logTake(for shotID: ShotID, in projectID: ProjectID,
+                 rating: TakeRating, notes: String,
+                 durationSeconds: Double?, cameraDescription: String?) throws {
+        guard session(in: projectID) == .active(shotID) else {
+            throw PlannerValidationError.unknownShot(shotID)
+        }
+        if let durationSeconds, !durationSeconds.isFinite || durationSeconds <= 0 {
+            throw NSError(domain: "ShotDeck", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Duration must be a positive number of seconds."])
+        }
+        // Time is known; camera is user-entered, not inferred from this device.
+        let camera = cameraDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let take = Take(shotID: shotID, recordedAt: .now, durationSeconds: durationSeconds,
+                        cameraDescription: camera?.isEmpty == true ? nil : camera,
+                        rating: rating, notes: notes)
+        let event = SessionEvent(projectID: projectID, occurredAt: .now,
+                                 kind: .takeAppended, shotID: shotID, takeID: take.id)
+        try requireStore().appendTake(take, sessionEvent: event)
+        shootRevision += 1
+    }
+
+    func chooseCandidate(_ takeID: TakeID, for shotID: ShotID, in projectID: ProjectID) throws {
+        guard session(in: projectID) == .active(shotID) else {
+            throw PlannerValidationError.unknownShot(shotID)
+        }
+        let event = SessionEvent(projectID: projectID, occurredAt: .now,
+                                 kind: .candidateChanged, shotID: shotID, takeID: takeID)
+        try requireStore().selectCandidate(takeID, for: shotID, event: event)
+        shootRevision += 1
+    }
+
+    func addContinuity(to shotID: ShotID, label: String) throws {
+        guard let shot = model.shot(shotID) else { throw PlannerValidationError.unknownShot(shotID) }
+        let title = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw PlannerValidationError.emptyTitle(entity: "Continuity check") }
+        let check = ContinuityCheck(shotID: shotID, label: title)
+        try requireStore().addRequiredContinuityCheck(check, to: shot)
+        var edited = shot
+        edited.requiredContinuityCheckIDs = (shot.requiredContinuityCheckIDs ?? []) + [check.id]
+        try model.updateShot(edited)
+        shootRevision += 1
+    }
+
+    func setContinuity(_ check: ContinuityCheck, status: ContinuityCheckStatus, notes: String) throws {
+        var edited = check
+        edited.status = status
+        edited.notes = notes
+        try requireStore().saveContinuityCheck(edited)
+        shootRevision += 1
     }
 
     /// Reusable framing tags already used in the project (user-owned).

@@ -161,8 +161,10 @@ final class PlannerUITests: XCTestCase {
         XCTAssertTrue(element("shoot.context").label.contains("Active shoot: Arrival"))
         tap("shoot.logTake")
         expectElement("shoot.take.0")
+        expectStatusText("Candidate unresolved")
+        XCTAssertTrue(element("shoot.coverage").label.contains("attempted"))
         tap("shoot.candidate.0")
-        // Candidate cannot become green: camera metadata is explicitly absent.
+        // Candidate cannot become green: duration and camera were not entered.
         XCTAssertTrue(element("shoot.coverage").label.contains("unknown"))
         type("shoot.checkLabel", "Wardrobe")
         tap("shoot.addCheck")

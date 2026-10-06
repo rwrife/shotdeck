@@ -321,6 +321,27 @@ final class PlannerStore {
         }
     }
 
+    // MARK: - Portability (issue #6)
+
+    func backupArchive() throws -> BackupArchive {
+        try requireStore().backup()
+    }
+
+    func restoreFromArchive(_ archive: BackupArchive) throws {
+        let store = try requireStore()
+        try store.restore(archive)
+        self.model = PlannerModel(
+            projects: try store.allProjects(),
+            scenes: try store.allScenes(),
+            shots: try store.allShots()
+        )
+        shootRevision += 1
+    }
+
+    func reportBundle() throws -> ReportBundle {
+        try requireStore().reports()
+    }
+
     /// Runs the persistence step for a model mutation that already happened.
     /// On failure the model is rolled back to `before` and the issue is
     /// surfaced — the UI never keeps changes the database refused.

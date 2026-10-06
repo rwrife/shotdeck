@@ -66,6 +66,14 @@ struct ProjectListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        PortabilityView()
+                    } label: {
+                        Label("Privacy & Files", systemImage: "lock.doc")
+                    }
+                    .accessibilityIdentifier("project.privacyFiles")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingCreate = true

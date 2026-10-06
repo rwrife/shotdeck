@@ -13,7 +13,10 @@ patterns=(
   'flutter'
   'react-native'
   'react_native'
-  'expo'
+  # Word-bounded: the Expo framework is forbidden, but native SwiftUI/AppKit
+  # API names legitimately contain "export" (e.g. .fileExporter). A bare
+  # substring match would fail closed on first-party Swift APIs.
+  '\bexpo\b'
   'kotlin[[:space:]-]*multiplatform'
   'maui'
   'unity'

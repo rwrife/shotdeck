@@ -181,4 +181,17 @@ final class PlannerUITests: XCTestCase {
         expectStatusText("Wardrobe: pending")
         XCTAssertTrue(element("shoot.coverage").label.contains("unknown"))
     }
+
+    func testPrivacyAndPortabilityViewSurfacesOptions() throws {
+        tap("project.privacyFiles")
+        expectStatusText("Your data")
+        expectStatusText("Backup and restore")
+        expectStatusText("Local reports")
+        expectElement("privacy.backup")
+        expectElement("privacy.restore")
+        expectElement("privacy.shotsCSV")
+        expectElement("privacy.takesCSV")
+        expectElement("privacy.coverageCSV")
+        expectElement("privacy.pdf")
+    }
 }

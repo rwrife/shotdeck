@@ -6,7 +6,7 @@ Local-first iPhone shot-list and continuity workspace for solo creators: plan fr
 
 ShotDeck helps solo filmmakers, photographers, and small volunteer crews move from a planned shot list to an honest record of what was captured. A project contains ordered scenes and shots; each shot can carry framing notes, a reference image, continuity checks, and append-only take records. The app derives coverage from that ledger instead of asking users to remember which angles still need work.
 
-This repository includes the native Swift iPhone-only app shell (`ShotDeck.xcodeproj`, `ShotDeck/`, `ShotDeckUITests/`), the pure domain package (`Packages/ShotDeckKit`), the local SQLite store (`Packages/ShotDeckStore`, schema v3), the accessible shot planner, and a shoot workspace. CI gates cover exact toolchain pinning, zero-network enforcement, native-only framework policy, iPhone-only bundle metadata, and UI journeys. Backup/restore, reports, and release automation remain tracked as follow-up issues.
+This repository includes the native Swift iPhone-only app shell (`ShotDeck.xcodeproj`, `ShotDeck/`, `ShotDeckUITests/`), the pure domain package (`Packages/ShotDeckKit`), the local SQLite store (`Packages/ShotDeckStore`, schema v3), the accessible shot planner, shoot workspace, and user-initiated local portability controls. CI gates cover exact toolchain pinning, zero-network enforcement, native-only framework policy, iPhone-only bundle metadata, and UI journeys. Signed TestFlight release automation remains tracked as a follow-up issue.
 
 ## Motivation
 
@@ -85,11 +85,11 @@ From a scene's shot list, open **Shoot workspace** and choose a shot to start or
 ## Status and milestones
 
 1. Native iPhone skeleton, exact-toolchain CI, and iPhone-only enforcement. *(Landed: `ShotDeck.xcodeproj`, `Packages/ShotDeckKit`, `.github/workflows/ci.yml`.)*
-2. Pure Swift domain and coverage engine.
-3. Local database and app-private media store.
-4. Shot-list planning and accessible take workflow.
-5. Continuity review, search, exports, and privacy controls.
-6. Native verification, archive, signed TestFlight upload, and processed-build evidence.
+2. Pure Swift domain and coverage engine. *(Landed.)*
+3. Local SQLite database. *(Landed: `Packages/ShotDeckStore`.)*
+4. Shot-list planning and accessible take workflow. *(Landed: Planner views.)*
+5. Continuity review and shoot workspace. *(Landed: issue #5.)* Backup/restore, reports, and privacy controls are in issue #6.
+6. Native verification, archive, signed TestFlight upload, and processed-build evidence. *(Issue #7.)*
 
 See [PLAN.md](PLAN.md) and the GitHub issue backlog for dependency order.
 

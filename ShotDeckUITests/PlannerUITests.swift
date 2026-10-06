@@ -186,9 +186,14 @@ final class PlannerUITests: XCTestCase {
         tap("project.privacyFiles")
         expectStatusText("Your data")
         expectStatusText("Backup and restore")
-        expectStatusText("Local reports")
         expectElement("privacy.backup")
         expectElement("privacy.restore")
+        // Form rows below the privacy copy are lazy; reveal the report section.
+        let pdf = element("privacy.pdf")
+        for _ in 0..<6 where !pdf.exists || !pdf.isHittable {
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        expectStatusText("Local reports")
         expectElement("privacy.shotsCSV")
         expectElement("privacy.takesCSV")
         expectElement("privacy.coverageCSV")

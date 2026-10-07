@@ -112,7 +112,7 @@ CI runs the same commands: `linux-package` exercises both package test suites (i
 
 ## Distribution
 
-CI will use the secret names `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, and `ASC_TEAM_ID`; values never belong in source, logs, issues, or reports. Release work must build with the pinned iOS 26+ toolchain, enforce `com.infinityball.shotdeck`, archive with iPhone-only metadata, upload through App Store Connect, and record the processed build ID before claiming TestFlight success.
+The [TestFlight release runbook](docs/testflight-release.md) describes the opt-in signed archive/export workflow, tag-upload path, curated evidence, and failure recovery. CI uses secret names `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, and `ASC_TEAM_ID`; values never belong in source, logs, issues, or reports. A workflow definition is not a successful release: only an observed `VALID` App Store Connect build ID for `com.infinityball.shotdeck` completes issue #7.
 
 ## License
 

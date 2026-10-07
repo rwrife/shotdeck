@@ -112,6 +112,7 @@ A single `ShootWorkspaceLayout` abstraction owns pane arrangement and fold-state
 - Permission-copy and privacy disclosures in-app.
 
 ### M6 — Release hardening
+*(TestFlight release pipeline, runbook, AppIcon asset catalog packaging, and secret-safe curated evidence delivered in issue #7. Processing-evidence gate remains open until an uploaded candidate is observed in App Store Connect.)*
 
 - Native Apple-runner verification (build/tests on pinned toolchain).
 - Archive/sign/upload to TestFlight via App Store Connect API keys.

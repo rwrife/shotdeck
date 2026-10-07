@@ -1,0 +1,75 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload to App Store Connect and require a VALID build
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shotdeck-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Signed iPhone archive + TestFlight evidence
+    runs-on: macos-15
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record source and validate release helpers
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 scripts/test_release.py
+          bash scripts/check_native_only.sh
+          bash scripts/check_zero_network.sh
+      - name: Archive, verify, export and optionally upload
+        timeout-minutes: 60
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+          UPLOAD: ${{ github.event_name == 'push' || inputs.upload }}
+        run: |
+          set -euo pipefail
+          mode=dry-run
+          if [ "$UPLOAD" = true ]; then mode=upload; fi
+          python3 scripts/release.py "$mode"
+      - name: Retain curated release evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/release-evidence
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Retain dry-run signed IPA (never signing credentials)
+        if: success() && github.event_name == 'workflow_dispatch' && !inputs.upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: shotdeck-ipa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/export/*.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove private signing files after interruption
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          private = Path(os.environ['RUNNER_TEMP']) / 'shotdeck-release-private'
+          if private.exists():
+              shutil.rmtree(private)
+          PY

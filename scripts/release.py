@@ -125,6 +125,21 @@ def categories(text):
     return dict(counts) or {"unclassified": 1}
 
 
+def diagnostics(text):
+    """Fixed codes for specific Xcode messages; never return any source text."""
+    patterns = {
+        "certificate-limit": r"reached the maximum number of certificates",
+        "certificate-revocation-required": r"choose a certificate to revoke",
+        "no-provisioning-profile": r"No profiles for .+ were found",
+        "authentication-failed": r"authentication failed|unable to authenticate|unauthorized",
+        "agreement-required": r"agreement.+(?:expired|must be accepted|needs to be accepted)",
+        "missing-package-product": r"Missing package product",
+        "missing-module-dependency": r"Unable to find module dependency",
+        "missing-ios-platform": r"iOS 26\.0 is not installed",
+    }
+    return sorted(code for code, pattern in patterns.items() if re.search(pattern, text, re.IGNORECASE))
+
+
 def command(args, name, raw, evidence, timeout=1200):
     log = raw / f"{name}.log"
     errors = raw / f"{name}-stderr.log"
@@ -134,10 +149,14 @@ def command(args, name, raw, evidence, timeout=1200):
             code = result.returncode
         except subprocess.TimeoutExpired:
             code = 124
-    summary = {"phase": name, "exit_code": code, "categories": categories(log.read_text(errors="replace") + errors.read_text(errors="replace"))}
+    text = log.read_text(errors="replace") + errors.read_text(errors="replace")
+    summary = {"phase": name, "exit_code": code, "categories": categories(text)}
+    if code != 0:
+        # Fixed diagnostic codes only; raw tool text never becomes published evidence.
+        summary["diagnostics"] = diagnostics(text)
     (evidence / f"{name}-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(f"{name}: exit {code}", flush=True)
-    require(code == 0, f"Release phase {name} failed; see category-only evidence")
+    require(code == 0, f"Release phase {name} failed; see curated evidence")
     return log
 
 
@@ -237,5 +256,5 @@ if __name__ == "__main__":
         run(sys.argv[1] == "upload")
     except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError):
         # Never print exception text: OS/Xcode errors can contain credentials.
-        print("Release blocked. Inspect fixed-category evidence and runbook; raw signing output is not published.", file=sys.stderr)
+        print("Release blocked. Inspect curated evidence (categories + fixed diagnostic codes) and the runbook; raw signing output is not published.", file=sys.stderr)
         sys.exit(1)

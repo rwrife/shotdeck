@@ -57,6 +57,28 @@ with tempfile.TemporaryDirectory() as directory:
     assert sentinel in (raw / "synthetic-stderr.log").read_text()
     assert sentinel not in (evidence / "synthetic-summary.json").read_text()
     assert all(isinstance(count, int) for count in release.categories("error: certificate " + sentinel).values())
+    # Failure summaries carry fixed diagnostic codes; raw log text never leaves ephemeral storage.
+    curated = json.loads((evidence / "synthetic-summary.json").read_text())
+    assert curated["exit_code"] == 1
+    assert curated["diagnostics"] == []
+    assert "certificate " + sentinel not in json.dumps(curated)
+    # Known Xcode/Apple signing failures map to fixed codes, case-insensitively.
+    assert release.diagnostics("xcodebuild: error: No profiles for 'com.infinityball.shotdeck' were found.") == ["no-provisioning-profile"]
+    assert release.diagnostics("Your account has reached the maximum number of certificates.\nChoose a certificate to revoke.") == sorted(
+        ["certificate-limit", "certificate-revocation-required"])
+    assert release.diagnostics("Missing package product ''") == ["missing-package-product"]
+    assert release.diagnostics("Unable to find module dependency: 'ShotDeckStore'") == ["missing-module-dependency"]
+    assert release.diagnostics("iOS 26.0 is not installed. Please download and install") == ["missing-ios-platform"]
+    assert release.diagnostics("all good") == []
+    assert release.diagnostics("authentication failed") == ["authentication-failed"]
+    # A real failing subprocess publishes only fixed codes, never the raw message.
+    noisy = "xcodebuild: error: No profiles for 'com.infinityball.shotdeck' were found " + sentinel
+    rejects(lambda: release.command([sys.executable, "-c", "import sys; print(sys.argv[1]); sys.exit(65)", noisy], "profilefail", raw, evidence))
+    profilefail = json.loads((evidence / "profilefail-summary.json").read_text())
+    assert profilefail["exit_code"] == 65
+    assert profilefail["diagnostics"] == ["no-provisioning-profile"]
+    assert sentinel not in json.dumps(profilefail)
+    assert "No profiles for" not in json.dumps(profilefail)
 
 settings = [{"target": "ShotDeck", "buildSettings": {"PRODUCT_BUNDLE_IDENTIFIER": release.BUNDLE, "TARGETED_DEVICE_FAMILY": "1", "IPHONEOS_DEPLOYMENT_TARGET": "26.0", "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon"}}]
 release.verify_settings(settings)

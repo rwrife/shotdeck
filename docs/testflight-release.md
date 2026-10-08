@@ -49,18 +49,18 @@ The workflow runs on `macos-15` runners with the exact pinned toolchain (Xcode 2
      - `provenance.json`: source commit, run number, attempt, toolchain versions.
      - `archive-metadata.json`: bundle ID, device family, icon, privacy manifest, code-sign status.
      - `processed-build.json` (when uploaded): build ID, build number, state, upload timestamp.
-     - `*-summary.json`: exit codes and fixed-vocabulary error counts only (never raw log lines).
+     - `*-summary.json`: exit codes and fixed-vocabulary error counts; on failed subprocesses, `diagnostics` lists recognized fixed codes only (never raw log lines). Unrecognized errors produce an empty list, not a diagnosis.
 
 ## Failure modes and recovery
 
 When an error occurs, `release.py` suppresses raw exception text and logs to prevent sensitive signing fragments from entering GitHub Actions output. The runner console prints a generic message:
 ```text
-Release blocked. Inspect fixed-category evidence and runbook; raw signing output is not published.
+Release blocked. Inspect curated evidence (categories + fixed diagnostic codes) and the runbook; raw signing output is not published.
 ```
 
 To triage the phase without publishing raw signing output:
 1. Download the `release-evidence-<run_id>-<attempt>` artifact. No artifact can also mean validation failed before evidence creation or artifact upload itself failed.
-2. Use `provenance.json`, `archive-metadata.json`, and the set of `<phase>-summary.json` files to locate the last recorded phase. A nonzero subprocess exit appears in its summary, with fixed-vocabulary category counts (`provisioning`, `signing-certificate`, `appstore-auth`, `app-identity`, `compiler-or-build`). These categories are hints, not diagnoses.
+2. Use `provenance.json`, `archive-metadata.json`, and the set of `<phase>-summary.json` files to locate the last recorded phase. A nonzero subprocess exit appears in its summary, with fixed-vocabulary category counts (`provisioning`, `signing-certificate`, `appstore-auth`, `app-identity`, `compiler-or-build`) and a `diagnostics` list of recognized fixed codes (`certificate-limit`, `certificate-revocation-required`, `no-provisioning-profile`, `authentication-failed`, `agreement-required`, `missing-package-product`, `missing-module-dependency`, `missing-ios-platform`). These are hints, not diagnoses; an empty `diagnostics` list means the failure text matched no known signature.
 3. A zero-exit summary records only the subprocess result. Subsequent checks can still fail: `verify_settings()` after the `settings` phase, archive metadata checks after `archive`, or ASC lookup/polling after `export-upload`. Those checks do not emit a phase summary. Neither a missing summary nor an absent `processed-build.json` alone identifies a specific cause.
 4. When further diagnosis needs sensitive Xcode or Apple response details, run on a trusted interactive Apple host and inspect private output there. Do not paste raw logs or credentials into GitHub artifacts/issues.
 
